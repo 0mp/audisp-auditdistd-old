@@ -9,6 +9,7 @@
 
 #define ADIST_ADDR "192.168.56.102"
 #define ADIST_PORT 7878
+#define ADIST_WELCOME_MSG "ADIST00"
 
 int
 tcp_connect(void)
@@ -64,6 +65,8 @@ main(void)
 	ret = SSL_connect(ssl);
 	if (ret != 1)
 		err(1, "Failed to connect over SSL");
+
+    SSL_write(ssl, ADIST_WELCOME_MSG, sizeof(ADIST_WELCOME_MSG));
 
 	SSL_free(ssl);
 	close(tcpfd);
