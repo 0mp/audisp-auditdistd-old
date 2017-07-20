@@ -66,7 +66,7 @@ main(void)
 	if (ret != 1)
 		err(1, "Failed to connect over SSL");
 
-    SSL_write(ssl, ADIST_WELCOME_MSG, sizeof(ADIST_WELCOME_MSG));
+	SSL_write(ssl, ADIST_WELCOME_MSG, sizeof(ADIST_WELCOME_MSG));
 
 	SSL_free(ssl);
 	close(tcpfd);
