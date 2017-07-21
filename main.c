@@ -78,7 +78,7 @@ main(int argc, char *argv[])
 		}
 	}
 	if (hostname == NULL || server == NULL || password == NULL)
-		err(1, "Usage: %s -h host -s server -p password\n", argv[0]);
+		errx(1, "Usage: %s -h host -s server -p password\n", argv[0]);
 
 	SSL_library_init();
 
