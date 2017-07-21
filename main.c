@@ -6,13 +6,13 @@
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
+#include <openssl/hmac.h>
 
-#define ADIST_ADDR "192.168.56.102"
-#define ADIST_PORT 7878
-#define ADIST_WELCOME_MSG "ADIST00"
+#define	ADIST_PORT	    7878
+#define	ADIST_WELCOME_MSG   "ADIST00"
 
 int
-tcp_connect(void)
+tcp_connect(const char *addr)
 {
 	struct sockaddr_in destaddr;
 	int sockfd;
@@ -21,7 +21,7 @@ tcp_connect(void)
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-	desthost = gethostbyname(ADIST_ADDR);
+	desthost = gethostbyname(addr);
 	if (desthost == NULL)
 		return 0;
 
@@ -37,12 +37,48 @@ tcp_connect(void)
 }
 
 int
-main(void)
+main(int argc, char *argv[])
 {
 	SSL_CTX *sslctx;
 	SSL *ssl;
 	int tcpfd;
 	int ret;
+
+	int opt;
+	char *hostname;
+	char *server;
+	char *password;
+	char welcome[8];
+	unsigned char rnd[32], hash[32];
+
+	hostname = NULL;
+	server = NULL;
+	password = NULL;
+
+	while ((opt = getopt(argc, argv, "h:s:p:")) != -1) {
+		switch (opt) {
+		case 'h':
+			/* E.g., "example.org" */
+			hostname = &(*optarg);
+			fprintf(stderr, "hostname: %s\n", hostname);
+			break;
+		case 's':
+			/* E.g., "192.168.56.101" */
+			server = &(*optarg);
+			fprintf(stderr, "server: %s\n", server);
+			break;
+		case 'p':
+			/* E.g., "vaabwY+e7+wvc48pqEhtZOq41ssysIz" */
+			password = &(*optarg);
+			fprintf(stderr, "password: %s\n", password);
+			break;
+		default:
+			/* Ignore. */
+			break;
+		}
+	}
+	if (hostname == NULL || server == NULL || password == NULL)
+		err(1, "Usage: %s -h host -s server -p password\n", argv[0]);
 
 	SSL_library_init();
 
@@ -56,7 +92,7 @@ main(void)
 	if (ssl == NULL)
 		err(1, "Failed to create a new SSL context for a connection");
 
-	tcpfd = tcp_connect();
+	tcpfd = tcp_connect(server);
 	if (tcpfd == 0)
 		err(1, "Failed to establish an underlying TCP connection");
 
@@ -67,6 +103,24 @@ main(void)
 		err(1, "Failed to connect over SSL");
 
 	SSL_write(ssl, ADIST_WELCOME_MSG, sizeof(ADIST_WELCOME_MSG));
+	SSL_read(ssl, welcome, sizeof(welcome));
+	// TODO: Make sure that the received version is supported.
+	fprintf(stderr, "Exchanged welcome messages (%s)\n", welcome);
+
+	SSL_write(ssl, hostname, sizeof(hostname));
+	fprintf(stderr, "Sent the host name\n");
+
+	/* Challenge */
+	SSL_read(ssl, rnd, sizeof(rnd));
+	fprintf(stderr, "Received challenge\n");
+
+	if (HMAC(EVP_sha256(), password,
+	    (int)strlen(password), rnd, (int)sizeof(rnd), hash,
+	    NULL) == NULL) {
+		err(1, "Unable to generate a response.");
+	}
+	SSL_write(ssl, hash, sizeof(rnd));
+	fprintf(stderr, "Responded to the challenge\n");
 
 	SSL_free(ssl);
 	close(tcpfd);
