@@ -119,7 +119,7 @@ main(int argc, char *argv[])
 	    NULL) == NULL) {
 		err(1, "Unable to generate a response.");
 	}
-	SSL_write(ssl, hash, sizeof(rnd));
+	SSL_write(ssl, hash, sizeof(hash));
 	fprintf(stderr, "Responded to the challenge\n");
 
 	SSL_free(ssl);
