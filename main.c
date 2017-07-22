@@ -1,8 +1,13 @@
 #include <sys/socket.h>
+#include <sys/syscall.h>
 
+#include <linux/random.h>
+
+#include <errno.h>
 #include <err.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
@@ -49,7 +54,7 @@ main(int argc, char *argv[])
 	char *server;
 	char *password;
 	char welcome[8];
-	unsigned char rnd[32], hash[32];
+	unsigned char rnd[32], hash[32], resp[32];
 
 	hostname = NULL;
 	server = NULL;
@@ -110,7 +115,7 @@ main(int argc, char *argv[])
 	SSL_write(ssl, hostname, sizeof(hostname));
 	fprintf(stderr, "Sent the host name\n");
 
-	/* Challenge */
+	/* Receive challenge. */
 	SSL_read(ssl, rnd, sizeof(rnd));
 	fprintf(stderr, "Received challenge\n");
 
@@ -122,6 +127,27 @@ main(int argc, char *argv[])
 	SSL_write(ssl, hash, sizeof(hash));
 	fprintf(stderr, "Responded to the challenge\n");
 
+	/* Send challenge. */
+	for (;;) {
+		ret = syscall(SYS_getrandom, rnd, sizeof(rnd), GRND_RANDOM);
+		if (ret == 32)
+			break;
+		else if (ret == -1 && errno != EINTR)
+			err(1, "Could not generate a challange.");
+	};
+	fprintf(stderr, "Generated a challenge\n");
+	SSL_write(ssl, rnd, sizeof(rnd));
+	SSL_read(ssl, resp, sizeof(resp));
+	if (HMAC(EVP_sha256(), password,
+	    (int)strlen(password), rnd, (int)sizeof(rnd), hash,
+	    NULL) == NULL) {
+		err(1, "Unable to generate a hash.");
+	}
+	if (memcmp(resp, hash, sizeof(resp)) != 0) {
+		errx(1, "Invalid response from %s.", server);
+	}
+
+	fprintf(stderr, "The server has been authenticated\n");
 	SSL_free(ssl);
 	close(tcpfd);
 	SSL_CTX_free(sslctx);
