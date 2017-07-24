@@ -49,12 +49,14 @@ main(int argc, char *argv[])
 	int tcpfd;
 	int ret;
 
+	uint64_t trailoffset;
 	int opt;
 	char *hostname;
 	char *server;
 	char *password;
 	char welcome[8];
 	unsigned char rnd[32], hash[32], resp[32];
+	char trailname[256];
 
 	hostname = NULL;
 	server = NULL;
@@ -148,6 +150,13 @@ main(int argc, char *argv[])
 	}
 
 	fprintf(stderr, "The server has been authenticated\n");
+
+	SSL_read(ssl, &trailoffset, sizeof(trailoffset));
+	SSL_read(ssl, trailname, sizeof(trailname));
+
+	fprintf(stderr, "Received trail name (%s) and offset (%ju)\n",
+	    trailname, trailoffset);
+
 	SSL_free(ssl);
 	close(tcpfd);
 	SSL_CTX_free(sslctx);
